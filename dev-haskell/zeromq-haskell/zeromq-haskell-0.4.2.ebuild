@@ -7,8 +7,8 @@ EAPI=2
 CABAL_FEATURES="lib profile haddock hscolour"
 inherit haskell-cabal
 
-DESCRIPTION="Fully evaluate data structures"
-HOMEPAGE="http://hackage.haskell.org/cgi-bin/hackage-scripts/package/deepseq"
+DESCRIPTION="Haskell bindings to 0MQ"
+HOMEPAGE="http://hackage.haskell.org/package/zeromq-haskell"
 SRC_URI="http://hackage.haskell.org/packages/archive/${PN}/${PV}/${P}.tar.gz"
 
 LICENSE="BSD"
