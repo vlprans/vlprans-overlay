@@ -1,0 +1,20 @@
+diff -rN -u /storage/portage-distfiles/darcs-src/cabal-install/Distribution/Client/IndexUtils.hs ~/temporary/IndexUtils.hs
+--- /storage/portage-distfiles/darcs-src/cabal-install/Distribution/Client/IndexUtils.hs	2011-02-17 12:08:24.140003049 +0200
++++ /home/vlad/temporary/IndexUtils.hs	2011-02-17 12:18:19.732003325 +0200
+@@ -167,10 +167,16 @@
+
+     extractPrefs :: Tar.Entry -> Maybe [Dependency]
+     extractPrefs entry = case Tar.entryContent entry of
++      {-
++       -- get rid of hackage's preferred-versions
++       -- I'd like to have bleeding-edge packages in system and I don't fear of
++       -- broken packages with improper depends
++
+       Tar.NormalFile content _
+          | takeFileName (Tar.entryPath entry) == "preferred-versions"
+         -> Just . parsePreferredVersions
+          . BS.Char8.unpack $ content
++      -}
+       _ -> Nothing
+
+     handleNotFound action = catch action $ \e -> if isDoesNotExistError e
