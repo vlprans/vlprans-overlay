@@ -1,0 +1,67 @@
+Tue Mar  8 22:15:52 EET 2011  vlprans@gmail.com
+  * Add type declarations to make GHC 7.0 happy
+diff -rN -u old-protocol-buffers/Text/ProtocolBuffers/Get.hs new-protocol-buffers/Text/ProtocolBuffers/Get.hs
+--- old-protocol-buffers/Text/ProtocolBuffers/Get.hs	2011-03-08 22:36:20.683001426 +0200
++++ new-protocol-buffers/Text/ProtocolBuffers/Get.hs	2011-03-08 22:36:20.688001426 +0200
+@@ -153,7 +153,7 @@
+   useCheckpoint
+   return a
+ 
+--- | 'lookAheadM' runs the @todo@ action. If the action returns 'Nothing' then the 
++-- | 'lookAheadM' runs the @todo@ action. If the action returns 'Nothing' then the
+ -- BinaryParser state is rewound (as in 'lookAhead').  If the action return 'Just' then
+ -- the BinaryParser is not rewound, and lookAheadM acts as an identity.
+ --
+@@ -166,7 +166,7 @@
+   maybe useCheckpoint (const clearCheckpoint) a
+   return a
+ 
+--- | 'lookAheadE' runs the @todo@ action. If the action returns 'Left' then the 
++-- | 'lookAheadE' runs the @todo@ action. If the action returns 'Left' then the
+ -- BinaryParser state is rewound (as in 'lookAhead').  If the action return 'Right' then
+ -- the BinaryParser is not rewound, and lookAheadE acts as an identity.
+ --
+@@ -189,9 +189,9 @@
+ instance (Show a) => Show (Result a) where
+   showsPrec _ (Failed n msg) = ("(Failed "++) . shows n . (' ':) . shows msg . (")"++)
+   showsPrec _ (Finished bs n a) =
+-    ("(CFinished ("++) 
++    ("(CFinished ("++)
+     . shows bs . (") ("++)
+-    . shows n . (") ("++) 
++    . shows n . (") ("++)
+     . shows a . ("))"++)
+   showsPrec _ (Partial {}) = ("(Partial <Maybe Data.ByteString.Lazy.ByteString-> Result a)"++)
+ 
+@@ -312,16 +312,21 @@
+         else sc False sIn pcIn  -- once Nothing has been given suspend is a no-op
+      where appendBS (S ss bs n) bs' = S ss (mappend bs bs') n
+            -- addFuture puts the new data in 'future' where throwError's collect can find and use it
++           addFuture :: forall b. L.ByteString -> FrameStack b -> FrameStack b
+            addFuture bs (HandlerFrame catcher s future pc) =
+                          HandlerFrame catcher s (future |> bs) (addFuture bs pc)
+            addFuture _bs x@(ErrorFrame {}) = x
++
+            -- Once suspend is given Nothing, it remembers this and always returns False
++           checkBool :: forall b. FrameStack b -> Bool
+            checkBool (ErrorFrame _ b) = b
+            checkBool (HandlerFrame _ _ _ pc) = checkBool pc
++
++           rememberFalse :: forall b. FrameStack b -> FrameStack b
+            rememberFalse (ErrorFrame ec _) = ErrorFrame ec False
+            rememberFalse (HandlerFrame catcher s future pc) =
+                           HandlerFrame catcher s future (rememberFalse pc)
+-          
++
+ -- A unique sort of command...
+ 
+ -- | 'discardInnerHandler' causes the most recent catchError to be
+@@ -530,7 +535,7 @@
+ -}
+ 
+ -- Below here are the class instances
+-    
++
+ instance Functor Get where
+   fmap f m = Get (\sc -> unGet m (sc . f))
+   {-# INLINE fmap #-}
