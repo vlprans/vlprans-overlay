@@ -28,6 +28,8 @@
 # re-emerge ghc (or ghc-bin). People using vanilla gcc can switch between
 # gcc-3.x and 4.x with no problems.
 
+EAPI="3"
+
 inherit base autotools bash-completion eutils flag-o-matic multilib toolchain-funcs ghc-package versionator pax-utils
 
 DESCRIPTION="The Glasgow Haskell Compiler"
@@ -36,24 +38,53 @@ HOMEPAGE="http://www.haskell.org/ghc/"
 # we don't have any binaries yet
 arch_binaries=""
 
+# sorted!
 #arch_binaries="$arch_binaries alpha? ( http://code.haskell.org/~slyfox/ghc-alpha/ghc-bin-${PV}-alpha.tbz2 )"
-#arch_binaries="$arch_binaries x86?   ( mirror://gentoo/ghc-bin-${PV}-x86.tbz2 )"
-#arch_binaries="$arch_binaries amd64? ( mirror://gentoo/ghc-bin-${PV}-amd64.tbz2 )"
+#arch_binaries="$arch_binaries arm? ( http://code.haskell.org/~slyfox/ghc-arm/ghc-bin-${PV}-arm.tbz2 )"
+#arch_binaries="$arch_binaries amd64? ( http://code.haskell.org/~slyfox/ghc-amd64/ghc-bin-${PV}-amd64.tbz2 )"
 #arch_binaries="$arch_binaries ia64?  ( http://code.haskell.org/~slyfox/ghc-ia64/ghc-bin-${PV}-ia64-fixed-fiw.tbz2 )"
-#arch_binaries="$arch_binaries sparc? ( http://code.haskell.org/~slyfox/ghc-sparc/ghc-bin-${PV}-sparc.tbz2 )"
-#arch_binaries="$arch_binaries ppc64? ( mirror://gentoo/ghc-bin-${PV}-ppc64.tbz2 )"
 #arch_binaries="$arch_binaries ppc? ( mirror://gentoo/ghc-bin-${PV}-ppc.tbz2 )"
+#arch_binaries="$arch_binaries ppc64? ( mirror://gentoo/ghc-bin-${PV}-ppc64.tbz2 )"
+#arch_binaries="$arch_binaries sparc? ( http://code.haskell.org/~slyfox/ghc-sparc/ghc-bin-${PV}-sparc.tbz2 )"
+#arch_binaries="$arch_binaries x86? ( http://code.haskell.org/~slyfox/ghc-x86/ghc-bin-${PV}-x86.tbz2 )"
 
 # various ports:
 #arch_binaries="$arch_binaries x86-fbsd? ( http://code.haskell.org/~slyfox/ghc-x86-fbsd/ghc-bin-${PV}-x86-fbsd.tbz2 )"
 
-SRC_URI="!binary? ( http://www.haskell.org/ghc/dist/7.0.2-rc2/${P}-src.tar.bz2 )"
-#	!ghcbootstrap? ( $arch_binaries )"
+# 0 - yet
+yet_binary() {
+	case "${ARCH}" in
+		#alpha)
+		#	return 0
+		#	;;
+		#arm)
+		#	ewarn "ARM binary is built on armv5tel-eabi toolchain. Use with caution."
+		#	return 0
+		#	;;
+		#amd64)
+		#	return 0
+		#	;;
+		##sparc)
+		#	return 0
+		#	;;
+		#x86)
+		#	return 0
+		#	;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+#SRC_URI="!binary? ( http://www.haskell.org/ghc/dist/${PV}/${P}-src.tar.bz2 )"
+SRC_URI="!binary? ( http://www.haskell.org/ghc/dist/7.2.1-rc2/${P}-src.tar.bz2 )"
+[[ -n $arch_binaries ]] && SRC_URI+=" !ghcbootstrap? ( $arch_binaries )"
 LICENSE="BSD"
 SLOT="0"
-KEYWORDS="~alpha ~amd64 ~ia64 ~ppc ~ppc64 ~sparc ~x86 ~x86-fbsd"
+# ghc on ia64 needs gcc to support -mcmodel=medium (or some dark hackery) to avoid TOC overflow
+KEYWORDS="~alpha ~amd64 -ia64 ~ppc ~ppc64 ~sparc ~x86 ~x86-fbsd"
 IUSE="doc ghcbootstrap llvm"
-IUSE+=" binary" # don't forgen about me later!
+IUSE+=" binary" # don't forget about me later!
 IUSE+=" ghcquickbuild" # overlay only
 
 RDEPEND="
@@ -70,21 +101,19 @@ RDEPEND="
 # built against gmp-4
 
 DEPEND="${RDEPEND}
-	ghcbootstrap? (	doc? (	~app-text/docbook-xml-dtd-4.2
-							app-text/docbook-xsl-stylesheets
-							>=dev-libs/libxslt-1.1.2 ) )"
+	ghcbootstrap? (	doc? (	app-text/docbook-xml-dtd:4.2
+				app-text/docbook-xml-dtd:4.5
+				app-text/docbook-xsl-stylesheets
+				>=dev-libs/libxslt-1.1.2 ) )"
 # In the ghcbootstrap case we rely on the developer having
 # >=ghc-5.04.3 on their $PATH already
 
-#PDEPEND="!ghcbootstrap? ( =app-admin/haskell-updater-1.1* )"
+PDEPEND="!ghcbootstrap? ( =app-admin/haskell-updater-1.2* )"
 PDEPEND="
 	${PDEPEND}
+	dev-haskell/random
 	dev-haskell/syb
 	llvm? ( sys-devel/llvm )"
-
-# use undocumented feature STRIP_MASK to fix this issue:
-# http://hackage.haskell.org/trac/ghc/ticket/3580
-STRIP_MASK="*/HSffi.o"
 
 append-ghc-cflags() {
 	local flag compile assemble link
@@ -153,6 +182,58 @@ ghc_setup_cflags() {
 	use ia64 && append-ghc-cflags compile -G0
 }
 
+# substitutes string $1 to $2 in files $3 $4 ...
+relocate_path() {
+	local from=$1
+	local   to=$2
+	shift 2
+	local file=
+	for file in "$@"
+	do
+		sed -i -e "s|$from|$to|g" \
+		    "$file" || die "path relocation failed for '$file'"
+	done
+}
+
+# changes hardcoded ghc paths and updates package index
+# $1 - new absolute root path
+relocate_ghc() {
+	local to=$1
+
+	# backup original script to use it later after relocation
+	local gp_back="${T}/ghc-pkg-${PV}-orig"
+	cp "${WORKDIR}/usr/bin/ghc-pkg-${PV}" "$gp_back" || die "unable to backup ghc-pkg wrapper"
+
+	# Relocate from /usr to ${EPREFIX}/usr
+	relocate_path "/usr" "${to}/usr" \
+		"${WORKDIR}/usr/bin/ghc-${PV}" \
+		"${WORKDIR}/usr/bin/ghci-${PV}" \
+		"${WORKDIR}/usr/bin/ghc-pkg-${PV}" \
+		"${WORKDIR}/usr/bin/hsc2hs" \
+		"${WORKDIR}/usr/$(get_libdir)/${P}/package.conf.d/"*
+
+	# this one we will use to regenerate cache
+	# so it shoult point to current tree location
+	relocate_path "/usr" "${WORKDIR}/usr" "$gp_back"
+
+	if use prefix; then
+		# and insert LD_LIBRARY_PATH entry to EPREFIX dir tree
+		# TODO: add the same for darwin's CHOST and it's DYLD_
+		local new_ldpath='LD_LIBRARY_PATH="'${EPREFIX}/$(get_libdir):${EPREFIX}/usr/$(get_libdir)'${LD_LIBRARY_PATH:+:}${LD_LIBRARY_PATH}"\nexport LD_LIBRARY_PATH'
+		sed -i -e '2i'"$new_ldpath" \
+			"${WORKDIR}/usr/bin/ghc-${PV}" \
+			"${WORKDIR}/usr/bin/ghci-${PV}" \
+			"${WORKDIR}/usr/bin/ghc-pkg-${PV}" \
+			"$gp_back" \
+			"${WORKDIR}/usr/bin/hsc2hs" \
+			|| die "Adding LD_LIBRARY_PATH for wrappers failed"
+	fi
+
+	# regenerate the binary package cache
+	"$gp_back" recache || die "failed to update cache after relocation"
+	rm "$gp_back"
+}
+
 pkg_setup() {
 	if use ghcbootstrap; then
 		ewarn "You requested ghc bootstrapping, this is usually only used"
@@ -163,13 +244,11 @@ pkg_setup() {
 		[[ -z $(type -P ghc) ]] && \
 			die "Could not find a ghc to bootstrap with."
 	else
-		eerror "No binary .tbz2 package available yet for your arch."
-		#
-		#eerror "No binary .tbz2 package available yet."
-		#
-		eerror "Please try emerging with USE=ghcbootstrap and report build"
-		eerror "sucess or failure to the haskell team (haskell@gentoo.org)"
-		die "No binary available for this arch yet, USE=ghcbootstrap"
+		if ! yet_binary; then
+			eerror "Please try emerging with USE=ghcbootstrap and report build"
+			eerror "sucess or failure to the haskell team (haskell@gentoo.org)"
+			die "No binary available for '${ARCH}' arch yet, USE=ghcbootstrap"
+		fi
 	fi
 }
 
@@ -177,10 +256,18 @@ src_unpack() {
 	# Create the ${S} dir if we're using the binary version
 	use binary && mkdir "${S}"
 
-	base_src_unpack
+	# the Solaris and Darwin binaries from ghc (maeder) need to be
+	# unpacked separately, so prevent them from being unpacked
+	local ONLYA=${A}
+	case ${CHOST} in
+		*-darwin* | *-solaris*)  ONLYA=${P}-src.tar.bz2  ;;
+	esac
+	unpack ${ONLYA}
+}
 
-	# ghc7: we don't need gmp hack any more, depend on >=gmp-5
-	#source "${FILESDIR}/ghc-apply-gmp-hack" "$(get_libdir)"
+src_prepare() {
+	[[ ${CHOST} != *-darwin* ]] && \
+		source "${FILESDIR}/ghc-apply-gmp-hack" "$(get_libdir)"
 
 	ghc_setup_cflags
 
@@ -190,29 +277,80 @@ src_unpack() {
 		sed -i -e "s|\"\$topdir\"|\"\$topdir\" ${GHC_FLAGS}|" \
 			"${WORKDIR}/usr/bin/ghc-${PV}"
 
-		# allow hardened users use vanilla biary to bootstrap ghc
+		# allow hardened users use vanilla binary to bootstrap ghc
 		# ghci uses mmap with rwx protection at it implements dynamic
 		# linking on it's own (bug #299709)
 		pax-mark -m "${WORKDIR}/usr/$(get_libdir)/${P}/ghc"
 	fi
 
 	if use binary; then
+		if use prefix; then
+			relocate_ghc "${EPREFIX}"
+		fi
 
 		# Move unpacked files to the expected place
 		mv "${WORKDIR}/usr" "${S}"
 	else
 		if ! use ghcbootstrap; then
-			# Relocate from /usr to ${WORKDIR}/usr
-			sed -i -e "s|/usr|${WORKDIR}/usr|g" \
-				"${WORKDIR}/usr/bin/ghc-${PV}" \
-				"${WORKDIR}/usr/bin/ghci-${PV}" \
-				"${WORKDIR}/usr/bin/ghc-pkg-${PV}" \
-				"${WORKDIR}/usr/bin/hsc2hs" \
-				"${WORKDIR}/usr/$(get_libdir)/${P}/package.conf.d/"* \
-				|| die "Relocating ghc from /usr to workdir failed"
+			case ${CHOST} in
+				*-darwin* | *-solaris*)
+				# UPDATE ME for ghc-7
+				mkdir "${WORKDIR}"/ghc-bin-installer || die
+				pushd "${WORKDIR}"/ghc-bin-installer > /dev/null || die
+				use sparc-solaris && unpack ghc-6.10.4-sparc-sun-solaris2.tar.bz2
+				use x86-solaris && unpack ghc-6.10.4-i386-unknown-solaris2.tar.bz2
+				use ppc-macos && unpack ghc-6.10.1-powerpc-apple-darwin.tar.bz2
+				use x86-macos && unpack ghc-6.10.1-i386-apple-darwin.tar.bz2
+				popd > /dev/null
 
-			# regenerate the binary package cache
-			"${WORKDIR}/usr/bin/ghc-pkg" recache
+				pushd "${WORKDIR}"/ghc-bin-installer/ghc-6.10.? > /dev/null || die
+				# fix the binaries so they run, on Solaris we need an
+				# LD_LIBRARY_PATH which has our prefix libdirs, on
+				# Darwin we need to replace the frameworks with our libs
+				# from the prefix fix before installation, because some
+				# of the tools are actually used during configure/make
+				if [[ ${CHOST} == *-solaris* ]] ; then
+					export LD_LIBRARY_PATH="${EPREFIX}/$(get_libdir):${EPREFIX}/usr/$(get_libdir):${LD_LIBRARY_PATH}"
+				elif [[ ${CHOST} == *-darwin* ]] ; then
+					# http://hackage.haskell.org/trac/ghc/ticket/2942
+					pushd utils/haddock/dist-install/build > /dev/null
+					ln -s Haddock haddock >& /dev/null # fails on IN-sensitive
+					popd > /dev/null
+
+					local readline_framework=GNUreadline.framework/GNUreadline
+					local gmp_framework=/opt/local/lib/libgmp.3.dylib
+					local ncurses_file=/opt/local/lib/libncurses.5.dylib
+					for binary in $(scanmacho -BRE MH_EXECUTE -F '%F' .) ; do
+						install_name_tool -change \
+							${readline_framework} \
+							"${EPREFIX}"/lib/libreadline.dylib \
+							${binary} || die
+						install_name_tool -change \
+							${gmp_framework} \
+							"${EPREFIX}"/usr/lib/libgmp.dylib \
+							${binary} || die
+						install_name_tool -change \
+							${ncurses_file} \
+							"${EPREFIX}"/usr/lib/libncurses.dylib \
+							${binary} || die
+					done
+					# we don't do frameworks!
+					sed -i \
+						-e 's/\(frameworks = \)\["GMP"\]/\1[]/g' \
+						-e 's/\(extraLibraries = \)\["m"\]/\1["m","gmp"]/g' \
+						rts/package.conf.in || die
+				fi
+
+				# it is autoconf, but we really don't want to give it too
+				# much arguments, in fact we do the make in-place anyway
+				./configure --prefix="${WORKDIR}"/usr || die
+				make install || die
+				popd > /dev/null
+				;;
+				*)
+				relocate_ghc "${WORKDIR}"
+				;;
+			esac
 		fi
 
 		sed -i -e "s|\"\$topdir\"|\"\$topdir\" ${GHC_FLAGS}|" \
@@ -220,22 +358,31 @@ src_unpack() {
 
 		cd "${S}" # otherwise epatch will break
 
-                epatch "${FILESDIR}/ghc-7.0.2-configure-CHOST.patch"
+		epatch "${FILESDIR}/ghc-7.0.4-CHOST-prefix.patch"
+
+		epatch "${FILESDIR}"/${PN}-7.0.4-darwin8.patch
+		# failed to apply. FIXME
+		#epatch "${FILESDIR}"/${PN}-6.12.3-mach-o-relocation-limit.patch
+
+		if use prefix; then
+			# Make configure find docbook-xsl-stylesheets from Prefix
+			sed -i -e '/^FP_DIR_DOCBOOK_XSL/s:\[.*\]:['"${EPREFIX}"'/usr/share/sgml/docbook/xsl-stylesheets/]:' utils/haddock/doc/configure.ac || die
+		fi
 
 		# as we have changed the build system
 		eautoreconf
 	fi
 }
 
-src_compile() {
+src_configure() {
 	if ! use binary; then
 
 		# initialize build.mk
 		echo '# Gentoo changes' > mk/build.mk
 
 		# Put docs into the right place, ie /usr/share/doc/ghc-${PV}
-		echo "docdir = /usr/share/doc/${P}" >> mk/build.mk
-		echo "htmldir = /usr/share/doc/${P}" >> mk/build.mk
+		echo "docdir = ${EPREFIX}/usr/share/doc/${P}" >> mk/build.mk
+		echo "htmldir = ${EPREFIX}/usr/share/doc/${P}" >> mk/build.mk
 
 		# The settings that give you the fastest complete GHC build are these:
 		if use ghcquickbuild; then
@@ -253,17 +400,21 @@ src_compile() {
 
 		# We also need to use the GHC_FLAGS flags when building ghc itself
 		echo "SRC_HC_OPTS+=${GHC_FLAGS}" >> mk/build.mk
-		echo "SRC_CC_OPTS+=${CFLAGS} -Wa,--noexecstack" >> mk/build.mk
+		echo "SRC_CC_OPTS+=${CFLAGS}" >> mk/build.mk
 		echo "SRC_LD_OPTS+=${FILTERED_LDFLAGS}" >> mk/build.mk
 
 		# We can't depend on haddock except when bootstrapping when we
 		# must build docs and include them into the binary .tbz2 package
 		if use ghcbootstrap && use doc; then
-			echo XMLDocWays="html" >> mk/build.mk
-			echo HADDOCK_DOCS=YES >> mk/build.mk
+			echo "BUILD_DOCBOOK_PDF  = NO"  >> mk/build.mk
+			echo "BUILD_DOCBOOK_PS   = NO"  >> mk/build.mk
+			echo "BUILD_DOCBOOK_HTML = YES" >> mk/build.mk
+			echo "HADDOCK_DOCS       = YES" >> mk/build.mk
 		else
-			echo XMLDocWays="" >> mk/build.mk
-			echo HADDOCK_DOCS=NO >> mk/build.mk
+			echo "BUILD_DOCBOOK_PDF  = NO" >> mk/build.mk
+			echo "BUILD_DOCBOOK_PS   = NO" >> mk/build.mk
+			echo "BUILD_DOCBOOK_HTML = NO" >> mk/build.mk
+			echo "HADDOCK_DOCS       = NO" >> mk/build.mk
 		fi
 
 		# circumvent a very strange bug that seems related with ghc producing
@@ -325,22 +476,24 @@ src_compile() {
 		# regular gcc.
 
 		econf --with-gcc=gcc || die "econf failed"
+	fi # ! use binary
+}
 
-		# LC_ALL needs to workaround ghc's ParseCmm failure on some (es) locales
-		# bug #202212 / http://hackage.haskell.org/trac/ghc/ticket/4207
-		LC_ALL=C emake all || die "make failed"
-
+src_compile() {
+	if ! use binary; then
+		emake all || die "make failed"
 	fi # ! use binary
 }
 
 src_install() {
 	if use binary; then
-		mv "${S}/usr" "${D}"
+		use prefix && mkdir -p "${ED}"
+		mv "${S}/usr" "${ED}"
 
 		# Remove the docs if not requested
 		if ! use doc; then
-			rm -rf "${D}/usr/share/doc/${P}/*/" \
-				"${D}/usr/share/doc/${P}/*.html" \
+			rm -rf "${ED}/usr/share/doc/${P}/*/" \
+				"${ED}/usr/share/doc/${P}/*.html" \
 				|| die "could not remove docs (P vs PF revision mismatch?)"
 		fi
 	else
@@ -350,8 +503,8 @@ src_install() {
 		# we copy them out of the unpacked binary .tbz2
 		if use doc; then
 			if ! use ghcbootstrap; then
-				mkdir -p "${D}/usr/share/doc"
-				mv "${WORKDIR}/usr/share/doc/${P}" "${D}/usr/share/doc" \
+				mkdir -p "${ED}/usr/share/doc"
+				mv "${WORKDIR}/usr/share/doc/${P}" "${ED}/usr/share/doc" \
 					|| die "failed to copy docs"
 			fi
 		fi
@@ -361,12 +514,12 @@ src_install() {
 			|| die "make ${insttarget} failed"
 
 		# remove wrapper and linker
-		rm -f "${D}"/usr/bin/haddock*
+		rm -f "${ED}"/usr/bin/haddock*
 
 		# ghci uses mmap with rwx protection at it implements dynamic
 		# linking on it's own (bug #299709)
 		# so mark resulting binary
-		pax-mark -m "${D}/usr/$(get_libdir)/${P}/ghc"
+		pax-mark -m "${ED}/usr/$(get_libdir)/${P}/ghc"
 
 		dodoc "${S}/README" "${S}/ANNOUNCE" "${S}/LICENSE" "${S}/VERSION"
 
@@ -375,7 +528,7 @@ src_install() {
 	fi
 
 	# path to the package.cache
-	PKGCACHE="${D}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
+	PKGCACHE="${ED}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
 
 	# copy the package.conf, including timestamp, save it so we later can put it
 	# back before uninstalling, or when upgrading.
@@ -394,7 +547,7 @@ pkg_postinst() {
 	ghc-reregister
 
 	# path to the package.cache
-	PKGCACHE="${ROOT}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
+	PKGCACHE="${EROOT}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
 
 	# give the cache a new timestamp, it must be as recent as
 	# the package.conf.d directory.
@@ -411,7 +564,6 @@ pkg_postinst() {
 		ewarn
 		ewarn "\e[1;31m************************************************************************\e[0m"
 		ewarn
-		ebeep 12
 	fi
 
 	bash-completion_pkg_postinst
@@ -438,7 +590,7 @@ pkg_prerm() {
 	# Overwrite the modified package.cache with a copy of the
 	# original one, so that it will be removed during uninstall.
 
-	PKGCACHE="${ROOT}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
+	PKGCACHE="${EROOT}/usr/$(get_libdir)/${P}/package.conf.d/package.cache"
 	rm -rf "${PKGCACHE}"
 
 	cp -p "${PKGCACHE}"{.shipped,}
