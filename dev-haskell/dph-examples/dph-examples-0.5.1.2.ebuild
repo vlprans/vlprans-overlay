@@ -26,11 +26,13 @@ DEPEND="${RDEPEND}
 		=dev-haskell/dph-prim-par-0.5*
 		=dev-haskell/dph-prim-seq-0.5*
 		=dev-haskell/dph-seq-0.5*
-		=dev-haskell/gloss-1.3*
+		>=dev-haskell/gloss-1.3
 		=dev-haskell/parseargs-0.1*
 		>=dev-haskell/vector-0.7
 		>=dev-lang/ghc-6.12.3"
 
 src_prepare() {
     sed -i -e 's/vector.*==.*0\.7\.\*/vector >= 0.7/' "${S}/${PN}.cabal"
+    sed -i -e 's/base.*==.*4\.4\.\*/base >= 4.4/' "${S}/${PN}.cabal"
+    sed -i -e 's/gloss.*==.*1\.3\.\*/gloss >= 1.3/' "${S}/${PN}.cabal"
 }

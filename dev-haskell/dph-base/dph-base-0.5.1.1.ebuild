@@ -24,5 +24,7 @@ DEPEND="${RDEPEND}
 		>=dev-haskell/cabal-1.6"
 
 src_prepare() {
-    sed -i -e 's/vector.*==.*0\.7\.\*/vector >= 0.7/' "${S}/${PN}.cabal"
+    sed -i -e 's/vector.*==.*0\.7\.\*/vector >= 0.7/' "${S}/${PN}.cabal";
+    sed -i -e 's/base.*==.*4\.4\.\*/base >= 4.4/' "${S}/${PN}.cabal"
+    sed -i -e 's/array.*==.*0\.3\.\*/array >= 0.3/' "${S}/${PN}.cabal"
 }
